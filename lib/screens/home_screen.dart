@@ -1,0 +1,786 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/preset.dart';
+import '../services/audio_generator.dart';
+import '../widgets/disclaimer_dialog.dart';
+import '../widgets/preset_card.dart';
+import '../widgets/wave_visualizer.dart';
+import '../widgets/sleep_timer_sheet.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+  final BinauralBeatService _audioService = BinauralBeatService();
+  BinauralPreset? _selectedPreset;
+  bool _isPlaying = false;
+  Duration? _sleepTimerDuration;
+  Duration? _remainingTime;
+  Timer? _countdownTimer;
+  late AnimationController _playButtonController;
+  
+  // Custom frequency mode
+  bool _isCustomMode = false;
+  double _customBaseFrequency = 200;
+  double _customBeatFrequency = 10;
+
+  static const String _disclaimerShownKey = 'disclaimer_shown';
+
+  @override
+  void initState() {
+    super.initState();
+    _playButtonController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _audioService.playingStream.listen((playing) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = playing;
+        });
+        if (playing) {
+          _playButtonController.forward();
+        } else {
+          _playButtonController.reverse();
+        }
+      }
+    });
+    
+    // Show disclaimer dialog on first app launch only
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndShowDisclaimer();
+    });
+  }
+
+  Future<void> _checkAndShowDisclaimer() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasSeenDisclaimer = prefs.getBool(_disclaimerShownKey) ?? false;
+    
+    if (!hasSeenDisclaimer && mounted) {
+      await showDisclaimerDialog(context);
+      await prefs.setBool(_disclaimerShownKey, true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    _playButtonController.dispose();
+    _audioService.dispose();
+    super.dispose();
+  }
+
+  void _selectPreset(BinauralPreset preset) {
+    setState(() {
+      _selectedPreset = preset;
+      _isCustomMode = false;
+    });
+    if (_isPlaying) {
+      _playPreset(preset);
+    }
+  }
+
+  void _selectCustomMode() {
+    setState(() {
+      _selectedPreset = null;
+      _isCustomMode = true;
+    });
+    if (_isPlaying) {
+      _playCustom();
+    }
+  }
+
+  Future<void> _playPreset(BinauralPreset preset) async {
+    await _audioService.play(
+      leftFrequency: preset.leftFrequency,
+      rightFrequency: preset.rightFrequency,
+      title: preset.name,
+      artist: '${preset.beatFrequency} Hz ${preset.waveType} Waves',
+    );
+  }
+
+  Future<void> _playCustom() async {
+    await _audioService.play(
+      leftFrequency: _customBaseFrequency,
+      rightFrequency: _customBaseFrequency + _customBeatFrequency,
+      title: 'Custom',
+      artist: '${_customBeatFrequency.toStringAsFixed(1)} Hz',
+    );
+  }
+
+  void _togglePlayPause() async {
+    if (!_isCustomMode && _selectedPreset == null) {
+      _showMessage('Select a preset or use custom frequencies');
+      return;
+    }
+
+    if (_isPlaying) {
+      await _audioService.stop();
+      _cancelSleepTimer();
+    } else {
+      if (_isCustomMode) {
+        await _playCustom();
+      } else {
+        await _playPreset(_selectedPreset!);
+      }
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF2A2A3A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  void _showSleepTimerSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => SleepTimerSheet(
+        currentTimer: _sleepTimerDuration,
+        onTimerSet: (duration) {
+          _setSleepTimer(duration);
+        },
+      ),
+    );
+  }
+
+  void _setSleepTimer(Duration? duration) {
+    _cancelSleepTimer();
+    
+    if (duration == null) {
+      setState(() {
+        _sleepTimerDuration = null;
+        _remainingTime = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _sleepTimerDuration = duration;
+      _remainingTime = duration;
+    });
+
+    _audioService.setSleepTimer(duration, () {
+      if (mounted) {
+        setState(() {
+          _sleepTimerDuration = null;
+          _remainingTime = null;
+        });
+        _showMessage('Sleep timer ended. Sweet dreams! 🌙');
+      }
+    });
+
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted && _remainingTime != null) {
+        setState(() {
+          _remainingTime = _remainingTime! - const Duration(seconds: 1);
+          if (_remainingTime!.isNegative) {
+            _remainingTime = Duration.zero;
+          }
+        });
+      }
+    });
+  }
+
+  void _cancelSleepTimer() {
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+  }
+
+  String _formatRemainingTime(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+    final seconds = duration.inSeconds % 60;
+
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    }
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  String _getWaveType(double beatFreq) {
+    if (beatFreq <= 4) return 'Delta';
+    if (beatFreq <= 8) return 'Theta';
+    if (beatFreq <= 14) return 'Alpha';
+    if (beatFreq <= 30) return 'Beta';
+    return 'Gamma';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0D0D15),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 20),
+                    _buildVisualizerSection(),
+                    const SizedBox(height: 32),
+                    _buildPresetsSection(),
+                    const SizedBox(height: 24),
+                    _buildCustomFrequencySection(),
+                    const SizedBox(height: 100),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      floatingActionButton: _buildPlayButton(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Beats by Arch',
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Binaural frequency therapy',
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white38,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          _buildTimerButton(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimerButton() {
+    final hasTimer = _remainingTime != null && _isPlaying;
+    
+    return GestureDetector(
+      onTap: _showSleepTimerSheet,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: hasTimer
+              ? const Color(0xFFB4A7D6).withValues(alpha: 0.2)
+              : const Color(0xFF1E1E2E),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: hasTimer
+                ? const Color(0xFFB4A7D6)
+                : const Color(0xFF2E2E3E),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.bedtime_outlined,
+              color: hasTimer
+                  ? const Color(0xFFB4A7D6)
+                  : Colors.white54,
+              size: 18,
+            ),
+            if (hasTimer) ...[
+              const SizedBox(width: 8),
+              Text(
+                _formatRemainingTime(_remainingTime!),
+                style: GoogleFonts.jetBrainsMono(
+                  color: const Color(0xFFB4A7D6),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVisualizerSection() {
+    final Color color;
+    final double beatFreq;
+    final String name;
+    final double leftFreq;
+    final double rightFreq;
+
+    if (_isCustomMode) {
+      color = const Color(0xFF00E5FF);
+      beatFreq = _customBeatFrequency;
+      name = 'Custom';
+      leftFreq = _customBaseFrequency;
+      rightFreq = _customBaseFrequency + _customBeatFrequency;
+    } else if (_selectedPreset != null) {
+      color = _selectedPreset!.accentColor;
+      beatFreq = _selectedPreset!.beatFrequency;
+      name = _selectedPreset!.name;
+      leftFreq = _selectedPreset!.leftFrequency;
+      rightFreq = _selectedPreset!.rightFrequency;
+    } else {
+      color = const Color(0xFFB4A7D6);
+      beatFreq = 10.0;
+      name = '';
+      leftFreq = 0;
+      rightFreq = 0;
+    }
+
+    final hasSelection = _isCustomMode || _selectedPreset != null;
+
+    return Container(
+      height: 180,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A2A),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFF2E2E3E)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
+          children: [
+            WaveVisualizer(
+              isPlaying: _isPlaying,
+              color: color,
+              beatFrequency: beatFreq,
+            ),
+            if (hasSelection)
+              Positioned(
+                bottom: 16,
+                left: 16,
+                right: 16,
+                child: Row(
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _isPlaying ? 'Now Playing' : 'Selected',
+                          style: TextStyle(
+                            color: color.withValues(alpha: 0.7),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${leftFreq.toInt()} Hz | ${rightFreq.toInt()} Hz',
+                        style: GoogleFonts.jetBrainsMono(
+                          color: color,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (!hasSelection)
+              Center(
+                child: Text(
+                  'Select a preset or use custom frequencies',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPresetsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'PRESETS',
+          style: GoogleFonts.plusJakartaSans(
+            color: Colors.white38,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 2,
+          ),
+        ),
+        const SizedBox(height: 16),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 0.95,
+          ),
+          itemCount: Presets.all.length,
+          itemBuilder: (context, index) {
+            final preset = Presets.all[index];
+            return PresetCard(
+              preset: preset,
+              isSelected: !_isCustomMode && _selectedPreset?.id == preset.id,
+              isPlaying: _isPlaying && !_isCustomMode && _selectedPreset?.id == preset.id,
+              onTap: () => _selectPreset(preset),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCustomFrequencySection() {
+    return GestureDetector(
+      onTap: _selectCustomMode,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: _isCustomMode
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    const Color(0xFF00E5FF).withValues(alpha: 0.15),
+                    const Color(0xFF7B2CBF).withValues(alpha: 0.1),
+                  ],
+                )
+              : null,
+          color: _isCustomMode ? null : const Color(0xFF1A1A2A),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: _isCustomMode
+                ? const Color(0xFF00E5FF)
+                : const Color(0xFF2E2E3E),
+            width: _isCustomMode ? 2 : 1,
+          ),
+          boxShadow: _isCustomMode
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF00E5FF).withValues(alpha: 0.2),
+                    blurRadius: 20,
+                    spreadRadius: 0,
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF00E5FF), Color(0xFF7B2CBF)],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.tune,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Custom Frequencies',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'Set your own binaural beat',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white38,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                if (_isCustomMode && _isPlaying)
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF00E5FF),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF00E5FF).withValues(alpha: 0.5),
+                          blurRadius: 8,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            
+            // Base Frequency Slider
+            _buildFrequencySlider(
+              label: 'Base Frequency',
+              value: _customBaseFrequency,
+              min: 50,
+              max: 500,
+              unit: 'Hz',
+              description: 'Carrier tone frequency',
+              onChanged: (value) {
+                setState(() {
+                  _customBaseFrequency = value;
+                });
+              },
+              onChangeEnd: (_) {
+                if (_isPlaying && _isCustomMode) {
+                  _playCustom();
+                }
+              },
+            ),
+            const SizedBox(height: 20),
+            
+            // Beat Frequency Slider
+            _buildFrequencySlider(
+              label: 'Beat Frequency',
+              value: _customBeatFrequency,
+              min: 0.5,
+              max: 50,
+              unit: 'Hz',
+              description: _getWaveType(_customBeatFrequency),
+              onChanged: (value) {
+                setState(() {
+                  _customBeatFrequency = value;
+                });
+              },
+              onChangeEnd: (_) {
+                if (_isPlaying && _isCustomMode) {
+                  _playCustom();
+                }
+              },
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Info row
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A2A3A),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.headphones,
+                    color: Colors.white.withValues(alpha: 0.5),
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'L: ${_customBaseFrequency.toInt()} Hz  •  R: ${(_customBaseFrequency + _customBeatFrequency).toInt()} Hz  •  Beat: ${_customBeatFrequency.toStringAsFixed(1)} Hz',
+                      style: GoogleFonts.jetBrainsMono(
+                        color: Colors.white54,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFrequencySlider({
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required String unit,
+    required String description,
+    required ValueChanged<double> onChanged,
+    ValueChanged<double>? onChangeEnd,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              label,
+              style: GoogleFonts.plusJakartaSans(
+                color: Colors.white70,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00E5FF).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '${value.toStringAsFixed(value < 10 ? 1 : 0)} $unit',
+                style: GoogleFonts.jetBrainsMono(
+                  color: const Color(0xFF00E5FF),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFF7B2CBF).withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                description,
+                style: GoogleFonts.plusJakartaSans(
+                  color: const Color(0xFF7B2CBF),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SliderTheme(
+          data: SliderThemeData(
+            trackHeight: 6,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+            activeTrackColor: const Color(0xFF00E5FF),
+            inactiveTrackColor: const Color(0xFF2A2A3A),
+            thumbColor: const Color(0xFF00E5FF),
+            overlayColor: const Color(0xFF00E5FF).withValues(alpha: 0.2),
+          ),
+          child: Slider(
+            value: value,
+            min: min,
+            max: max,
+            onChanged: onChanged,
+            onChangeEnd: onChangeEnd,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPlayButton() {
+    final Color color;
+    if (_isCustomMode) {
+      color = const Color(0xFF00E5FF);
+    } else if (_selectedPreset != null) {
+      color = _selectedPreset!.accentColor;
+    } else {
+      color = const Color(0xFFB4A7D6);
+    }
+    
+    return GestureDetector(
+      onTap: _togglePlayPause,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        width: 72,
+        height: 72,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              color,
+              color.withValues(alpha: 0.7),
+            ],
+          ),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.4),
+              blurRadius: 24,
+              spreadRadius: 0,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: Icon(
+            _isPlaying ? Icons.stop_rounded : Icons.play_arrow_rounded,
+            key: ValueKey(_isPlaying),
+            color: const Color(0xFF0D0D15),
+            size: 36,
+          ),
+        ),
+      ),
+    );
+  }
+}
