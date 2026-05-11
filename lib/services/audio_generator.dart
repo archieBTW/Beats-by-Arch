@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show compute, kIsWeb;
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:path_provider/path_provider.dart' show getTemporaryDirectory;
 
 /// Parameters for generating binaural beats in isolate
 class BinauralParams {
@@ -161,24 +161,34 @@ class BinauralBeatService {
     
     final audioData = await compute(_generateBinauralBeatIsolate, params);
     
-    // Write to temporary file (more reliable in release mode than StreamAudioSource)
-    final tempDir = await getTemporaryDirectory();
-    _tempAudioFile = File('${tempDir.path}/binaural_beat.wav');
-    await _tempAudioFile!.writeAsBytes(audioData);
-    
     // Calculate beat frequency for display
     final beatFreq = (rightFrequency - leftFrequency).abs();
-    
-    // Play from file with media metadata for notification
-    final audioSource = AudioSource.file(
-      _tempAudioFile!.path,
-      tag: MediaItem(
-        id: 'binaural_beat_${DateTime.now().millisecondsSinceEpoch}',
-        title: title ?? 'Binaural Beat',
-        artist: artist ?? '${beatFreq.toStringAsFixed(1)} Hz',
-        album: 'Beats by Arch',
-      ),
+    final mediaItem = MediaItem(
+      id: 'binaural_beat_${DateTime.now().millisecondsSinceEpoch}',
+      title: title ?? 'Binaural Beat',
+      artist: artist ?? '${beatFreq.toStringAsFixed(1)} Hz',
+      album: 'Beats by Arch',
     );
+
+    AudioSource audioSource;
+    
+    if (kIsWeb) {
+      // On web, we can't use the filesystem, so we play from bytes URI
+      audioSource = AudioSource.uri(
+        Uri.dataFromBytes(audioData, mimeType: 'audio/wav'),
+        tag: mediaItem,
+      );
+    } else {
+      // Write to temporary file (more reliable in release mode on native than StreamAudioSource)
+      final tempDir = await getTemporaryDirectory();
+      _tempAudioFile = File('${tempDir.path}/binaural_beat.wav');
+      await _tempAudioFile!.writeAsBytes(audioData);
+      
+      audioSource = AudioSource.file(
+        _tempAudioFile!.path,
+        tag: mediaItem,
+      );
+    }
     
     await _player.setAudioSource(audioSource);
     await _player.setLoopMode(LoopMode.one);
@@ -190,7 +200,7 @@ class BinauralBeatService {
     await _player.stop();
     
     // Clean up temp file
-    if (_tempAudioFile != null && await _tempAudioFile!.exists()) {
+    if (!kIsWeb && _tempAudioFile != null && await _tempAudioFile!.exists()) {
       try {
         await _tempAudioFile!.delete();
       } catch (_) {
@@ -231,7 +241,7 @@ class BinauralBeatService {
     _cancelSleepTimer();
     _player.dispose();
     // Clean up temp file on dispose
-    if (_tempAudioFile != null) {
+    if (!kIsWeb && _tempAudioFile != null) {
       _tempAudioFile!.delete().catchError((_) => _tempAudioFile!);
     }
   }
