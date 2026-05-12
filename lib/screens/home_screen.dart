@@ -24,7 +24,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Duration? _remainingTime;
   Timer? _countdownTimer;
   late AnimationController _playButtonController;
-  
+
   // Custom frequency mode
   bool _isCustomMode = false;
   double _customBaseFrequency = 200;
@@ -51,7 +51,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         }
       }
     });
-    
+
     // Show disclaimer dialog on first app launch only
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndShowDisclaimer();
@@ -61,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Future<void> _checkAndShowDisclaimer() async {
     final prefs = await SharedPreferences.getInstance();
     final hasSeenDisclaimer = prefs.getBool(_disclaimerShownKey) ?? false;
-    
+
     if (!hasSeenDisclaimer && mounted) {
       await showDisclaimerDialog(context);
       await prefs.setBool(_disclaimerShownKey, true);
@@ -137,29 +137,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       SnackBar(
         content: Text(message),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: const Color(0xFF2A2A3A),
+        backgroundColor: const Color(0xFF12121A),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
 
-  void _showSleepTimerSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => SleepTimerSheet(
-        currentTimer: _sleepTimerDuration,
-        onTimerSet: (duration) {
-          _setSleepTimer(duration);
-        },
-      ),
-    );
-  }
 
   void _setSleepTimer(Duration? duration) {
     _cancelSleepTimer();
-    
+
     if (duration == null) {
       setState(() {
         _sleepTimerDuration = null;
@@ -222,11 +209,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D15),
+      backgroundColor: Colors.black,
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(),
+            const SizedBox(height: 20),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -252,86 +239,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Beats by Arch',
-                style: GoogleFonts.plusJakartaSans(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Binaural frequency therapy',
-                style: GoogleFonts.plusJakartaSans(
-                  color: Colors.white38,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ],
-          ),
-          const Spacer(),
-          _buildTimerButton(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimerButton() {
-    final hasTimer = _remainingTime != null && _isPlaying;
-    
-    return GestureDetector(
-      onTap: _showSleepTimerSheet,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: hasTimer
-              ? const Color(0xFFB4A7D6).withValues(alpha: 0.2)
-              : const Color(0xFF1E1E2E),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: hasTimer
-                ? const Color(0xFFB4A7D6)
-                : const Color(0xFF2E2E3E),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.bedtime_outlined,
-              color: hasTimer
-                  ? const Color(0xFFB4A7D6)
-                  : Colors.white54,
-              size: 18,
-            ),
-            if (hasTimer) ...[
-              const SizedBox(width: 8),
-              Text(
-                _formatRemainingTime(_remainingTime!),
-                style: GoogleFonts.jetBrainsMono(
-                  color: const Color(0xFFB4A7D6),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildVisualizerSection() {
     final Color color;
@@ -341,7 +248,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final double rightFreq;
 
     if (_isCustomMode) {
-      color = const Color(0xFF00E5FF);
+      color = const Color(0xFFB4A7D6);
       beatFreq = _customBeatFrequency;
       name = 'Custom';
       leftFreq = _customBaseFrequency;
@@ -365,9 +272,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Container(
       height: 180,
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A2A),
+        color: const Color(0xFF0D0D12),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFF2E2E3E)),
+        border: Border.all(color: const Color(0xFF1E1E2E)),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
@@ -475,7 +382,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             return PresetCard(
               preset: preset,
               isSelected: !_isCustomMode && _selectedPreset?.id == preset.id,
-              isPlaying: _isPlaying && !_isCustomMode && _selectedPreset?.id == preset.id,
+              isPlaying:
+                  _isPlaying &&
+                  !_isCustomMode &&
+                  _selectedPreset?.id == preset.id,
               onTap: () => _selectPreset(preset),
             );
           },
@@ -496,23 +406,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    const Color(0xFF00E5FF).withValues(alpha: 0.15),
+                    const Color(0xFFB4A7D6).withValues(alpha: 0.15),
                     const Color(0xFF7B2CBF).withValues(alpha: 0.1),
                   ],
                 )
               : null,
-          color: _isCustomMode ? null : const Color(0xFF1A1A2A),
+          color: _isCustomMode ? null : const Color(0xFF0D0D12),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: _isCustomMode
-                ? const Color(0xFF00E5FF)
-                : const Color(0xFF2E2E3E),
+                ? const Color(0xFFB4A7D6)
+                : const Color(0xFF1E1E2E),
             width: _isCustomMode ? 2 : 1,
           ),
           boxShadow: _isCustomMode
               ? [
                   BoxShadow(
-                    color: const Color(0xFF00E5FF).withValues(alpha: 0.2),
+                    color: const Color(0xFFB4A7D6).withValues(alpha: 0.2),
                     blurRadius: 20,
                     spreadRadius: 0,
                   ),
@@ -528,15 +438,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Color(0xFF00E5FF), Color(0xFF7B2CBF)],
+                      colors: [Color(0xFFB4A7D6), Color(0xFF7B2CBF)],
                     ),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
-                    Icons.tune,
-                    color: Colors.white,
-                    size: 20,
-                  ),
+                  child: const Icon(Icons.tune, color: Colors.white, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Column(
@@ -566,10 +472,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     height: 12,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: const Color(0xFF00E5FF),
+                      color: const Color(0xFFB4A7D6),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF00E5FF).withValues(alpha: 0.5),
+                          color: const Color(0xFFB4A7D6).withValues(alpha: 0.5),
                           blurRadius: 8,
                           spreadRadius: 2,
                         ),
@@ -579,7 +485,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ],
             ),
             const SizedBox(height: 24),
-            
+
             // Base Frequency Slider
             _buildFrequencySlider(
               label: 'Base Frequency',
@@ -600,7 +506,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               },
             ),
             const SizedBox(height: 20),
-            
+
             // Beat Frequency Slider
             _buildFrequencySlider(
               label: 'Beat Frequency',
@@ -620,14 +526,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 }
               },
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Info row
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFF2A2A3A),
+                color: const Color(0xFF12121A),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -650,9 +556,93 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ],
               ),
             ),
+            
+            _buildSleepTimerControls(),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSleepTimerControls() {
+    final List<int> presetMinutes = [15, 30, 45, 60];
+    final hasActiveTimer = _remainingTime != null && _isPlaying;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Text(
+              'SLEEP TIMER',
+              style: GoogleFonts.plusJakartaSans(
+                color: Colors.white38,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const Spacer(),
+            if (hasActiveTimer)
+              Text(
+                _formatRemainingTime(_remainingTime!),
+                style: GoogleFonts.jetBrainsMono(
+                  color: const Color(0xFFB4A7D6),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            ...presetMinutes.map((minutes) {
+              final isSelected = _sleepTimerDuration?.inMinutes == minutes;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () {
+                    if (isSelected) {
+                      _setSleepTimer(null);
+                    } else {
+                      _setSleepTimer(Duration(minutes: minutes));
+                    }
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected 
+                          ? const Color(0xFFB4A7D6).withValues(alpha: 0.2) 
+                          : const Color(0xFF12121A),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isSelected ? const Color(0xFFB4A7D6) : Colors.white10,
+                      ),
+                    ),
+                    child: Text(
+                      '${minutes}m',
+                      style: TextStyle(
+                        color: isSelected ? const Color(0xFFB4A7D6) : Colors.white38,
+                        fontSize: 12,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+            if (_sleepTimerDuration != null)
+              IconButton(
+                onPressed: () => _setSleepTimer(null),
+                icon: const Icon(Icons.close, color: Colors.white38, size: 18),
+                visualDensity: VisualDensity.compact,
+              ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -683,13 +673,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFF00E5FF).withValues(alpha: 0.15),
+                color: const Color(0xFFB4A7D6).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
                 '${value.toStringAsFixed(value < 10 ? 1 : 0)} $unit',
                 style: GoogleFonts.jetBrainsMono(
-                  color: const Color(0xFF00E5FF),
+                  color: const Color(0xFFB4A7D6),
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -719,10 +709,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             trackHeight: 6,
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
             overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
-            activeTrackColor: const Color(0xFF00E5FF),
-            inactiveTrackColor: const Color(0xFF2A2A3A),
-            thumbColor: const Color(0xFF00E5FF),
-            overlayColor: const Color(0xFF00E5FF).withValues(alpha: 0.2),
+            activeTrackColor: const Color(0xFFB4A7D6),
+            inactiveTrackColor: const Color(0xFF1E1E2E),
+            thumbColor: const Color(0xFFB4A7D6),
+            overlayColor: const Color(0xFFB4A7D6).withValues(alpha: 0.2),
           ),
           child: Slider(
             value: value,
@@ -739,13 +729,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildPlayButton() {
     final Color color;
     if (_isCustomMode) {
-      color = const Color(0xFF00E5FF);
+      color = const Color(0xFFB4A7D6);
     } else if (_selectedPreset != null) {
       color = _selectedPreset!.accentColor;
     } else {
       color = const Color(0xFFB4A7D6);
     }
-    
+
     return GestureDetector(
       onTap: _togglePlayPause,
       child: AnimatedContainer(
@@ -756,10 +746,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              color,
-              color.withValues(alpha: 0.7),
-            ],
+            colors: [color, color.withValues(alpha: 0.7)],
           ),
           shape: BoxShape.circle,
           boxShadow: [
@@ -776,7 +763,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           child: Icon(
             _isPlaying ? Icons.stop_rounded : Icons.play_arrow_rounded,
             key: ValueKey(_isPlaying),
-            color: const Color(0xFF0D0D15),
+            color: Colors.black,
             size: 36,
           ),
         ),

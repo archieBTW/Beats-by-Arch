@@ -20,7 +20,7 @@ Future<void> main() async {
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Color(0xFF0D0D15),
+      systemNavigationBarColor: Colors.black,
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
@@ -39,12 +39,12 @@ class BeatsByArchApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0D0D15),
+        scaffoldBackgroundColor: Colors.black,
         colorScheme: ColorScheme.dark(
           primary: const Color(0xFFB4A7D6),
           secondary: const Color(0xFF9B8AC4),
-          surface: const Color(0xFF1A1A2A),
-          onPrimary: const Color(0xFF0D0D15),
+          surface: const Color(0xFF0D0D12),
+          onPrimary: Colors.black,
           onSecondary: Colors.white,
           onSurface: Colors.white,
         ),
@@ -52,12 +52,12 @@ class BeatsByArchApp extends StatelessWidget {
           ThemeData.dark().textTheme,
         ),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF0D0D15),
+          backgroundColor: Colors.black,
           elevation: 0,
           centerTitle: true,
         ),
         snackBarTheme: SnackBarThemeData(
-          backgroundColor: const Color(0xFF2A2A3A),
+          backgroundColor: const Color(0xFF12121A),
           contentTextStyle: GoogleFonts.plusJakartaSans(
             color: Colors.white,
           ),

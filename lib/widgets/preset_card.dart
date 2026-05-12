@@ -33,12 +33,12 @@ class PresetCard extends StatelessWidget {
                   ],
                 )
               : null,
-          color: isSelected ? null : const Color(0xFF1E1E2E),
+          color: isSelected ? null : const Color(0xFF0D0D12),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected
                 ? preset.accentColor
-                : const Color(0xFF2E2E3E),
+                : const Color(0xFF1E1E2E),
             width: isSelected ? 2 : 1,
           ),
           boxShadow: isSelected
@@ -64,7 +64,7 @@ class PresetCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: isSelected
                           ? preset.accentColor.withValues(alpha: 0.2)
-                          : const Color(0xFF2A2A3A),
+                          : const Color(0xFF12121A),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
@@ -116,7 +116,7 @@ class PresetCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: isSelected
                       ? preset.accentColor.withValues(alpha: 0.2)
-                      : const Color(0xFF2A2A3A),
+                      : const Color(0xFF12121A),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(

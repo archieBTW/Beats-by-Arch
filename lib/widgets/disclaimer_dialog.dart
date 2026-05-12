@@ -18,12 +18,12 @@ class DisclaimerDialog extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xFF1E1E2E),
-              Color(0xFF151520),
+              Color(0xFF0D0D12),
+              Color(0xFF000000),
             ],
           ),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFF3E3E4E)),
+          border: Border.all(color: const Color(0xFF1E1E2E)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.5),
@@ -135,7 +135,7 @@ class DisclaimerDialog extends StatelessWidget {
                   onPressed: onAccept,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFB4A7D6),
-                    foregroundColor: const Color(0xFF0D0D15),
+                    foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),

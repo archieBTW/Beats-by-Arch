@@ -31,7 +31,7 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFF1A1A2A),
+        color: Color(0xFF0D0D12),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.all(24),
@@ -112,7 +112,7 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
                   decoration: BoxDecoration(
                     color: isSelected
                         ? const Color(0xFFB4A7D6).withValues(alpha: 0.2)
-                        : const Color(0xFF2A2A3A),
+                        : const Color(0xFF12121A),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: isSelected
@@ -160,8 +160,8 @@ class _SleepTimerSheetState extends State<SleepTimerSheet> {
                   : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFB4A7D6),
-                foregroundColor: const Color(0xFF1A1A2A),
-                disabledBackgroundColor: const Color(0xFF2A2A3A),
+                foregroundColor: Colors.black,
+                disabledBackgroundColor: const Color(0xFF12121A),
                 disabledForegroundColor: Colors.white38,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
