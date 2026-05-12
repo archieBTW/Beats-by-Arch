@@ -7,7 +7,6 @@ import '../services/audio_generator.dart';
 import '../widgets/disclaimer_dialog.dart';
 import '../widgets/preset_card.dart';
 import '../widgets/wave_visualizer.dart';
-import '../widgets/sleep_timer_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});

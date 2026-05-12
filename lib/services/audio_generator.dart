@@ -13,52 +13,56 @@ class BinauralParams {
   final double rightFrequency;
   final double volume;
   final int sampleRate;
-  final int durationSeconds;
+  final int numSamples;
 
   BinauralParams({
     required this.leftFrequency,
     required this.rightFrequency,
     this.volume = 0.5,
-    this.sampleRate = 44100,
-    int targetDurationSeconds = 30,
-  }) : durationSeconds = _calculateSeamlessLoopDuration(
-         leftFrequency, rightFrequency, targetDurationSeconds);
+    int? sampleRate,
+    int? targetDurationSeconds,
+  })  : sampleRate = sampleRate ?? 44100,
+        numSamples = _calculateSeamlessLoopSamples(
+          leftFrequency,
+          rightFrequency,
+          sampleRate ?? 44100,
+          targetDurationSeconds ?? 60,
+        );
 
-  /// Calculate a duration where both frequencies complete whole cycles
-  /// This ensures the sine waves align at the loop boundary for seamless looping
-  static int _calculateSeamlessLoopDuration(
-    double leftFreq, double rightFreq, int targetDuration) {
-    // Search for a duration near target where both frequencies complete whole cycles
-    int bestDuration = targetDuration;
+  /// Calculate the number of samples where both frequencies complete whole cycles
+  /// This ensures the sine waves align perfectly at the loop boundary
+  static int _calculateSeamlessLoopSamples(
+    double leftFreq, double rightFreq, int sampleRate, int targetDuration) {
+    final targetSamples = targetDuration * sampleRate;
+    int bestSamples = targetSamples;
     double minError = double.infinity;
 
-    for (int d = targetDuration - 10; d <= targetDuration + 10; d++) {
-      if (d <= 0) continue;
+    // Search +/- 1 second around target for best alignment
+    for (int n = targetSamples - sampleRate; n <= targetSamples + sampleRate; n++) {
+      if (n <= 0) continue;
 
-      double leftCycles = leftFreq * d;
-      double rightCycles = rightFreq * d;
+      double leftCycles = n * leftFreq / sampleRate;
+      double rightCycles = n * rightFreq / sampleRate;
 
-      // Calculate how far each is from completing whole cycles
       double leftError = (leftCycles - leftCycles.roundToDouble()).abs();
       double rightError = (rightCycles - rightCycles.roundToDouble()).abs();
       double totalError = leftError + rightError;
 
       if (totalError < minError) {
         minError = totalError;
-        bestDuration = d;
+        bestSamples = n;
       }
 
-      // Perfect alignment found
-      if (totalError < 0.0001) break;
+      if (totalError < 0.000001) break;
     }
 
-    return bestDuration;
+    return bestSamples;
   }
 }
 
 /// Generate binaural beat audio data in a background isolate
 Uint8List _generateBinauralBeatIsolate(BinauralParams params) {
-  final numSamples = params.sampleRate * params.durationSeconds;
+  final numSamples = params.numSamples;
   const numChannels = 2; // Stereo
   const bitsPerSample = 16;
   final byteRate = params.sampleRate * numChannels * (bitsPerSample ~/ 8);
@@ -110,21 +114,30 @@ Uint8List _generateBinauralBeatIsolate(BinauralParams params) {
   offset += 4;
 
   // Generate audio samples
-  // Note: Duration is calculated to ensure both frequencies complete whole cycles,
-  // so the sine waves align perfectly at the loop boundary (no fade needed)
   final maxAmplitude = (32767 * params.volume).toInt();
   final twoPi = 2 * pi;
+  
+  // Apply a very small fade (100ms) at the start and end to prevent clicks
+  // during the browser's loop transition
+  final fadeSamples = (params.sampleRate * 0.1).toInt();
 
   for (int i = 0; i < numSamples; i++) {
     final t = i / params.sampleRate;
+    double fade = 1.0;
+    
+    if (i < fadeSamples) {
+      fade = i / fadeSamples;
+    } else if (i > numSamples - fadeSamples) {
+      fade = (numSamples - i) / fadeSamples;
+    }
 
     // Left channel - base frequency
-    final leftSample = (sin(twoPi * params.leftFrequency * t) * maxAmplitude).toInt();
+    final leftSample = (sin(twoPi * params.leftFrequency * t) * maxAmplitude * fade).toInt();
     buffer.setInt16(offset, leftSample, Endian.little);
     offset += 2;
 
     // Right channel - base frequency + beat frequency
-    final rightSample = (sin(twoPi * params.rightFrequency * t) * maxAmplitude).toInt();
+    final rightSample = (sin(twoPi * params.rightFrequency * t) * maxAmplitude * fade).toInt();
     buffer.setInt16(offset, rightSample, Endian.little);
     offset += 2;
   }
@@ -151,16 +164,6 @@ class BinauralBeatService {
   }) async {
     await stop();
     
-    // Generate audio in background isolate to not block UI
-    // Duration is automatically calculated for seamless looping
-    final params = BinauralParams(
-      leftFrequency: leftFrequency,
-      rightFrequency: rightFrequency,
-      volume: volume,
-    );
-    
-    final audioData = await compute(_generateBinauralBeatIsolate, params);
-    
     // Calculate beat frequency for display
     final beatFreq = (rightFrequency - leftFrequency).abs();
     final mediaItem = MediaItem(
@@ -173,16 +176,38 @@ class BinauralBeatService {
     AudioSource audioSource;
     
     if (kIsWeb) {
-      // On web, we can't use the filesystem, so we play from bytes URI
+      // On web, we generate a much longer clip (10 mins) and use a lower sample rate
+      // to avoid browser looping gaps while keeping memory usage reasonable (~50MB).
+      // The 100ms fade-out at the end of the 10-min clip prevents audible clicks.
+      final webParams = BinauralParams(
+        leftFrequency: leftFrequency,
+        rightFrequency: rightFrequency,
+        volume: volume,
+        sampleRate: 22050, // 22kHz is plenty for binaural sine waves
+        targetDurationSeconds: 600, // 10 minutes
+      );
+      
+      final webAudioData = await compute(_generateBinauralBeatIsolate, webParams);
+      
       audioSource = AudioSource.uri(
-        Uri.dataFromBytes(audioData, mimeType: 'audio/wav'),
+        Uri.dataFromBytes(webAudioData, mimeType: 'audio/wav'),
         tag: mediaItem,
       );
     } else {
-      // Write to temporary file (more reliable in release mode on native than StreamAudioSource)
+      // On native, short 60s sample-perfect loops work well
+      final nativeParams = BinauralParams(
+        leftFrequency: leftFrequency,
+        rightFrequency: rightFrequency,
+        volume: volume,
+        targetDurationSeconds: 60,
+      );
+      
+      final nativeAudioData = await compute(_generateBinauralBeatIsolate, nativeParams);
+      
+      // Write to temporary file
       final tempDir = await getTemporaryDirectory();
       _tempAudioFile = File('${tempDir.path}/binaural_beat.wav');
-      await _tempAudioFile!.writeAsBytes(audioData);
+      await _tempAudioFile!.writeAsBytes(nativeAudioData);
       
       audioSource = AudioSource.file(
         _tempAudioFile!.path,
