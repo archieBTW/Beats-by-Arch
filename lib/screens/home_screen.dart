@@ -142,7 +142,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-
   void _setSleepTimer(Duration? duration) {
     _cancelSleepTimer();
 
@@ -210,27 +209,62 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth > 900;
+
+            if (isDesktop) {
+              return SingleChildScrollView(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 20),
-                    _buildVisualizerSection(),
-                    const SizedBox(height: 32),
-                    _buildPresetsSection(),
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: _buildVisualizerSection(isDesktop: true),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: _buildPresetsSection(
+                        isDesktop: true,
+                        width: constraints.maxWidth,
+                      ),
+                    ),
                     const SizedBox(height: 24),
-                    _buildCustomFrequencySection(),
-                    const SizedBox(height: 100),
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        left: 24,
+                        right: 24,
+                        bottom: 40,
+                      ),
+                      child: _buildCustomFrequencySection(isDesktop: true),
+                    ),
                   ],
                 ),
-              ),
-            ),
-          ],
+              );
+            }
+
+            return Column(
+              children: [
+                const SizedBox(height: 20),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 20),
+                        _buildVisualizerSection(),
+                        const SizedBox(height: 32),
+                        _buildPresetsSection(),
+                        const SizedBox(height: 24),
+                        _buildCustomFrequencySection(),
+                        const SizedBox(height: 100),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
       floatingActionButton: _buildPlayButton(),
@@ -238,8 +272,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-
-  Widget _buildVisualizerSection() {
+  Widget _buildVisualizerSection({bool isDesktop = false}) {
     final Color color;
     final double beatFreq;
     final String name;
@@ -269,7 +302,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final hasSelection = _isCustomMode || _selectedPreset != null;
 
     return Container(
-      height: 180,
+      height: isDesktop ? 220 : 180,
       decoration: BoxDecoration(
         color: const Color(0xFF0D0D12),
         borderRadius: BorderRadius.circular(24),
@@ -352,28 +385,40 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildPresetsSection() {
+  Widget _buildPresetsSection({bool isDesktop = false, double? width}) {
+    int crossAxisCount = 2;
+    if (isDesktop) {
+      if (width != null && width < 1200) {
+        crossAxisCount = 3;
+      } else {
+        crossAxisCount = 6;
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          'PRESETS',
-          style: GoogleFonts.plusJakartaSans(
-            color: Colors.white38,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 2,
+        if (!isDesktop) ...[
+          Text(
+            'PRESETS',
+            style: GoogleFonts.plusJakartaSans(
+              color: Colors.white38,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 2,
+            ),
           ),
-        ),
-        const SizedBox(height: 16),
+          const SizedBox(height: 16),
+        ],
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 0.95,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisSpacing: 24,
+            crossAxisSpacing: 24,
+            childAspectRatio: isDesktop ? 0.85 : 0.95,
           ),
           itemCount: Presets.all.length,
           itemBuilder: (context, index) {
@@ -393,12 +438,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildCustomFrequencySection() {
+  Widget _buildCustomFrequencySection({bool isDesktop = false}) {
     return GestureDetector(
       onTap: _selectCustomMode,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.symmetric(
+          horizontal: isDesktop ? 40 : 20,
+          vertical: 20,
+        ),
         decoration: BoxDecoration(
           gradient: _isCustomMode
               ? LinearGradient(
@@ -411,7 +459,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 )
               : null,
           color: _isCustomMode ? null : const Color(0xFF0D0D12),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color: _isCustomMode
                 ? const Color(0xFFB4A7D6)
@@ -428,149 +476,196 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ]
               : null,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFB4A7D6), Color(0xFF7B2CBF)],
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.tune, color: Colors.white, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Custom Frequencies',
-                      style: GoogleFonts.plusJakartaSans(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      'Set your own binaural beat',
-                      style: GoogleFonts.plusJakartaSans(
-                        color: Colors.white38,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                if (_isCustomMode && _isPlaying)
-                  Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFFB4A7D6),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFB4A7D6).withValues(alpha: 0.5),
-                          blurRadius: 8,
-                          spreadRadius: 2,
+        child: Center(
+          child: Container(
+            constraints: BoxConstraints(
+              maxWidth: isDesktop ? 1200 : double.infinity,
+            ),
+            child: isDesktop
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(flex: 2, child: _buildCustomFrequencyHeader()),
+                      const SizedBox(width: 40),
+                      Expanded(
+                        flex: 3,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildFrequencySliders(),
+                            const SizedBox(height: 16),
+                            _buildFrequencyInfo(),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // Base Frequency Slider
-            _buildFrequencySlider(
-              label: 'Base Frequency',
-              value: _customBaseFrequency,
-              min: 50,
-              max: 500,
-              unit: 'Hz',
-              description: 'Carrier tone frequency',
-              onChanged: (value) {
-                setState(() {
-                  _customBaseFrequency = value;
-                });
-              },
-              onChangeEnd: (_) {
-                if (_isPlaying && _isCustomMode) {
-                  _playCustom();
-                }
-              },
-            ),
-            const SizedBox(height: 20),
-
-            // Beat Frequency Slider
-            _buildFrequencySlider(
-              label: 'Beat Frequency',
-              value: _customBeatFrequency,
-              min: 0.5,
-              max: 50,
-              unit: 'Hz',
-              description: _getWaveType(_customBeatFrequency),
-              onChanged: (value) {
-                setState(() {
-                  _customBeatFrequency = value;
-                });
-              },
-              onChangeEnd: (_) {
-                if (_isPlaying && _isCustomMode) {
-                  _playCustom();
-                }
-              },
-            ),
-
-            const SizedBox(height: 16),
-
-            // Info row
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF12121A),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.headphones,
-                    color: Colors.white.withValues(alpha: 0.5),
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'L: ${_customBaseFrequency.toInt()} Hz  •  R: ${(_customBaseFrequency + _customBeatFrequency).toInt()} Hz  •  Beat: ${_customBeatFrequency.toStringAsFixed(1)} Hz',
-                      style: GoogleFonts.jetBrainsMono(
-                        color: Colors.white54,
-                        fontSize: 11,
                       ),
-                    ),
+                      const SizedBox(width: 40),
+                      Expanded(
+                        flex: 2,
+                        child: _buildSleepTimerControls(isDesktop: true),
+                      ),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildCustomFrequencyHeader(),
+                      const SizedBox(height: 24),
+                      _buildFrequencySliders(),
+                      const SizedBox(height: 16),
+                      _buildFrequencyInfo(),
+                      _buildSleepTimerControls(),
+                    ],
                   ),
-                ],
-              ),
-            ),
-            
-            _buildSleepTimerControls(),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildSleepTimerControls() {
+  Widget _buildCustomFrequencyHeader() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFB4A7D6), Color(0xFF7B2CBF)],
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(Icons.tune, color: Colors.white, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Custom Frequencies',
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                'Set your own binaural beat',
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white38,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_isCustomMode && _isPlaying) ...[
+          const SizedBox(width: 12),
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFFB4A7D6),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFB4A7D6).withValues(alpha: 0.5),
+                  blurRadius: 8,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildFrequencySliders() {
+    return Column(
+      children: [
+        _buildFrequencySlider(
+          label: 'Base Frequency',
+          value: _customBaseFrequency,
+          min: 50,
+          max: 500,
+          unit: 'Hz',
+          description: 'Carrier tone frequency',
+          onChanged: (value) {
+            setState(() {
+              _customBaseFrequency = value;
+            });
+          },
+          onChangeEnd: (_) {
+            if (_isPlaying && _isCustomMode) {
+              _playCustom();
+            }
+          },
+        ),
+        const SizedBox(height: 20),
+        _buildFrequencySlider(
+          label: 'Beat Frequency',
+          value: _customBeatFrequency,
+          min: 0.5,
+          max: 50,
+          unit: 'Hz',
+          description: _getWaveType(_customBeatFrequency),
+          onChanged: (value) {
+            setState(() {
+              _customBeatFrequency = value;
+            });
+          },
+          onChangeEnd: (_) {
+            if (_isPlaying && _isCustomMode) {
+              _playCustom();
+            }
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFrequencyInfo() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF12121A),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.headphones,
+            color: Colors.white.withValues(alpha: 0.5),
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'L: ${_customBaseFrequency.toInt()} Hz  •  R: ${(_customBaseFrequency + _customBeatFrequency).toInt()} Hz  •  Beat: ${_customBeatFrequency.toStringAsFixed(1)} Hz',
+              style: GoogleFonts.jetBrainsMono(
+                color: Colors.white54,
+                fontSize: 11,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSleepTimerControls({bool isDesktop = false}) {
     final List<int> presetMinutes = [15, 30, 45, 60];
     final hasActiveTimer = _remainingTime != null && _isPlaying;
-    
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: isDesktop
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        const SizedBox(height: 24),
+        if (!isDesktop) const SizedBox(height: 24),
         Row(
           children: [
             Text(
@@ -611,22 +706,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
-                      color: isSelected 
-                          ? const Color(0xFFB4A7D6).withValues(alpha: 0.2) 
+                      color: isSelected
+                          ? const Color(0xFFB4A7D6).withValues(alpha: 0.2)
                           : const Color(0xFF12121A),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: isSelected ? const Color(0xFFB4A7D6) : Colors.white10,
+                        color: isSelected
+                            ? const Color(0xFFB4A7D6)
+                            : Colors.white10,
                       ),
                     ),
                     child: Text(
                       '${minutes}m',
                       style: TextStyle(
-                        color: isSelected ? const Color(0xFFB4A7D6) : Colors.white38,
+                        color: isSelected
+                            ? const Color(0xFFB4A7D6)
+                            : Colors.white38,
                         fontSize: 12,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                       ),
                     ),
                   ),
