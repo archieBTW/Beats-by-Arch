@@ -170,8 +170,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted && _remainingTime != null) {
+        final webRemaining = _audioService.getRemainingSleepTime();
         setState(() {
-          _remainingTime = _remainingTime! - const Duration(seconds: 1);
+          if (webRemaining != null) {
+            _remainingTime = webRemaining;
+          } else {
+            _remainingTime = _remainingTime! - const Duration(seconds: 1);
+          }
           if (_remainingTime!.isNegative) {
             _remainingTime = Duration.zero;
           }
@@ -183,6 +188,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _cancelSleepTimer() {
     _countdownTimer?.cancel();
     _countdownTimer = null;
+    _audioService.cancelSleepTimer();
   }
 
   String _formatRemainingTime(Duration duration) {

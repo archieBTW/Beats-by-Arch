@@ -4,11 +4,10 @@ import 'package:beats_by_arch/main.dart';
 void main() {
   testWidgets('App loads correctly', (WidgetTester tester) async {
     await tester.pumpWidget(const BeatsByArchApp());
-    
-    // Verify the app title appears
-    expect(find.text('Beats by Arch'), findsOneWidget);
-    
+    await tester.pump();
+
     // Verify presets section exists
     expect(find.text('PRESETS'), findsOneWidget);
+    expect(find.text('Custom Frequencies'), findsOneWidget);
   });
 }

@@ -1,12 +1,12 @@
 {
-    "name": "beats_by_arch",
-    "short_name": "beats_by_arch",
+    "name": "Beats by Arch — Binaural Beat Generator",
+    "short_name": "Beats by Arch",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#000000",
     "theme_color": "#000000",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "description": "Precision binaural beat generator for focus, flow state, meditation, and deep sleep.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

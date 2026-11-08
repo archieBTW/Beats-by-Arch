@@ -1,39 +1,465 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="Beats by Arch — Precision binaural beat generator for focus, flow state, meditation, and deep sleep.">
 
-  <!-- iOS meta tags & icons -->
+  <!-- OpenGraph / Social Media -->
+  <meta property="og:title" content="Beats by Arch — Binaural Beat Generator">
+  <meta property="og:description" content="Zero-click, continuous Web Audio binaural beat synthesis for focus, flow state, meditation, and deep sleep.">
+  <meta property="og:image" content="icons/Icon-512.png">
+  <meta property="og:type" content="website">
+
+  <!-- iOS & Mobile PWA meta tags -->
   <meta name="theme-color" content="#000000">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="beats_by_arch">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Beats by Arch">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>beats_by_arch</title>
+  <title>Beats by Arch — Binaural Beat Generator</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    html, body {
+      background-color: #000000;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    #loading-container {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background-color: #000000;
+      z-index: 999999;
+      transition: opacity 0.35s ease;
+      user-select: none;
+    }
+    .loading-logo {
+      width: 76px;
+      height: 76px;
+      border-radius: 20px;
+      box-shadow: 0 8px 30px rgba(180, 167, 214, 0.25);
+      animation: pulse 2.2s infinite ease-in-out;
+    }
+    .loading-title {
+      margin-top: 18px;
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.6px;
+      color: #f4f4f5;
+    }
+    .loading-spinner {
+      margin-top: 20px;
+      width: 22px;
+      height: 22px;
+      border: 2.5px solid rgba(255, 255, 255, 0.12);
+      border-top-color: #B4A7D6;
+      border-radius: 50%;
+      animation: spin 0.85s linear infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.92; }
+      50% { transform: scale(1.04); opacity: 1; }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+
+  <script>
+    // Dismiss loading splash on first frame render
+    window.addEventListener('flutter-first-frame', function () {
+      var el = document.getElementById('loading-container');
+      if (el) {
+        el.style.opacity = '0';
+        setTimeout(function() { el.remove(); }, 350);
+      }
+    });
+
+    // Zero-latency, click-free, background-resilient Web Audio API binaural beat engine
+    window.binauralEngine = (function () {
+      let ctx = null;
+      let leftOsc = null;
+      let rightOsc = null;
+      let leftPanner = null;
+      let rightPanner = null;
+      let merger = null;
+      let masterGain = null;
+      let mediaDest = null;
+      let keepAliveAudio = null;
+      let wakeLock = null;
+      let isPlaying = false;
+      let currentVolume = 0.5;
+      let currentLeftFreq = 200;
+      let currentRightFreq = 210;
+      let currentTitle = 'Binaural Beat';
+      let currentArtist = 'Beats by Arch';
+
+      // Sleep timer state tracked by wall-clock timestamp so background tab throttling never delays it
+      let timerEndTimestamp = null;
+      let timerInterval = null;
+      let audioStopScheduleTimeout = null;
+
+      function createSilentWavDataUri() {
+        // 1-second 8000Hz mono 16-bit PCM silent WAV as fallback if MediaStream audio isn't supported
+        const sampleRate = 8000;
+        const numSamples = sampleRate;
+        const buffer = new ArrayBuffer(44 + numSamples * 2);
+        const view = new DataView(buffer);
+        function writeString(offset, str) {
+          for (let i = 0; i < str.length; i++) {
+            view.setUint8(offset + i, str.charCodeAt(i));
+          }
+        }
+        writeString(0, 'RIFF');
+        view.setUint32(4, 36 + numSamples * 2, true);
+        writeString(8, 'WAVE');
+        writeString(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, 1, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * 2, true);
+        view.setUint16(32, 2, true);
+        view.setUint16(34, 16, true);
+        writeString(36, 'data');
+        view.setUint32(40, numSamples * 2, true);
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        return 'data:audio/wav;base64,' + btoa(binary);
+      }
+
+      const silentWavUri = createSilentWavDataUri();
+
+      function ensureContext() {
+        if (!ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          try {
+            ctx = new AudioCtx({ latencyHint: 'playback' });
+          } catch (_) {
+            ctx = new AudioCtx();
+          }
+        }
+        if (ctx.state === 'suspended') {
+          ctx.resume().catch(function () {});
+        }
+        return ctx;
+      }
+
+      function setupNodes() {
+        const c = ensureContext();
+        if (leftOsc && rightOsc && masterGain) return c;
+
+        masterGain = c.createGain();
+        masterGain.gain.setValueAtTime(0.0001, c.currentTime);
+        masterGain.connect(c.destination);
+
+        // Route into MediaStreamDestination as well so an HTML5 <audio> element
+        // keeps the browser audio session and OS MediaSession alive in background tabs
+        if (typeof c.createMediaStreamDestination === 'function') {
+          try {
+            mediaDest = c.createMediaStreamDestination();
+            masterGain.connect(mediaDest);
+          } catch (_) {}
+        }
+
+        leftOsc = c.createOscillator();
+        rightOsc = c.createOscillator();
+        leftOsc.type = 'sine';
+        rightOsc.type = 'sine';
+        leftOsc.frequency.setValueAtTime(currentLeftFreq, c.currentTime);
+        rightOsc.frequency.setValueAtTime(currentRightFreq, c.currentTime);
+
+        if (typeof c.createStereoPanner === 'function') {
+          leftPanner = c.createStereoPanner();
+          rightPanner = c.createStereoPanner();
+          leftPanner.pan.setValueAtTime(-1, c.currentTime);
+          rightPanner.pan.setValueAtTime(1, c.currentTime);
+
+          leftOsc.connect(leftPanner);
+          rightOsc.connect(rightPanner);
+          leftPanner.connect(masterGain);
+          rightPanner.connect(masterGain);
+        } else {
+          merger = c.createChannelMerger(2);
+          leftOsc.connect(merger, 0, 0);
+          rightOsc.connect(merger, 0, 1);
+          merger.connect(masterGain);
+        }
+
+        leftOsc.start();
+        rightOsc.start();
+        return c;
+      }
+
+      function startKeepAliveAudio() {
+        try {
+          if (!keepAliveAudio) {
+            keepAliveAudio = new Audio();
+            keepAliveAudio.loop = true;
+            keepAliveAudio.setAttribute('playsinline', '');
+            keepAliveAudio.setAttribute('webkit-playsinline', '');
+          }
+          if (mediaDest && mediaDest.stream) {
+            // Mute the HTML5 element output so we don't double-play on top of c.destination,
+            // OR keep volume very low (0.001) so the browser treats it as active audible playback.
+            if (keepAliveAudio.srcObject !== mediaDest.stream) {
+              keepAliveAudio.srcObject = mediaDest.stream;
+            }
+            keepAliveAudio.volume = 0.001;
+          } else {
+            if (keepAliveAudio.src !== silentWavUri) {
+              keepAliveAudio.src = silentWavUri;
+            }
+            keepAliveAudio.volume = 0.01;
+          }
+          const p = keepAliveAudio.play();
+          if (p && typeof p.catch === 'function') {
+            p.catch(function () {
+              // Fallback to silent WAV if srcObject play was rejected
+              try {
+                keepAliveAudio.srcObject = null;
+                keepAliveAudio.src = silentWavUri;
+                keepAliveAudio.volume = 0.01;
+                keepAliveAudio.play().catch(function () {});
+              } catch (_) {}
+            });
+          }
+        } catch (_) {}
+      }
+
+      function stopKeepAliveAudio() {
+        try {
+          if (keepAliveAudio) {
+            keepAliveAudio.pause();
+          }
+        } catch (_) {}
+      }
+
+      function updateMediaSession(state) {
+        if (!('mediaSession' in navigator)) return;
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: currentTitle || 'Binaural Beat',
+            artist: currentArtist || 'Beats by Arch',
+            album: 'Beats by Arch',
+            artwork: [
+              { src: 'icons/Icon-192.png', sizes: '192x192', type: 'image/png' },
+              { src: 'icons/Icon-512.png', sizes: '512x512', type: 'image/png' }
+            ]
+          });
+          navigator.mediaSession.playbackState = state;
+          navigator.mediaSession.setActionHandler('play', function () {
+            engine.play(currentLeftFreq, currentRightFreq, currentVolume, currentTitle, currentArtist);
+          });
+          navigator.mediaSession.setActionHandler('pause', function () {
+            engine.stop();
+          });
+          navigator.mediaSession.setActionHandler('stop', function () {
+            engine.stop();
+          });
+        } catch (_) {}
+      }
+
+      async function requestWakeLock() {
+        if ('wakeLock' in navigator && navigator.wakeLock) {
+          try {
+            if (!wakeLock) {
+              wakeLock = await navigator.wakeLock.request('screen');
+              wakeLock.addEventListener('release', function () {
+                wakeLock = null;
+              });
+            }
+          } catch (_) {}
+        }
+      }
+
+      function releaseWakeLock() {
+        if (wakeLock) {
+          try {
+            wakeLock.release();
+          } catch (_) {}
+          wakeLock = null;
+        }
+      }
+
+      function notifyState(playing) {
+        window.dispatchEvent(new CustomEvent('binaural-state', {
+          detail: { isPlaying: playing }
+        }));
+      }
+
+      const engine = {
+        play: function (leftFreq, rightFreq, volume, title, artist) {
+          currentLeftFreq = Number(leftFreq) || 200;
+          currentRightFreq = Number(rightFreq) || 210;
+          currentVolume = volume !== undefined ? Number(volume) : 0.5;
+          if (title) currentTitle = String(title);
+          if (artist) currentArtist = String(artist);
+
+          const c = setupNodes();
+          const now = c.currentTime;
+
+          if (audioStopScheduleTimeout) {
+            clearTimeout(audioStopScheduleTimeout);
+            audioStopScheduleTimeout = null;
+          }
+
+          // Smoothly transition frequencies (60ms time constant prevents any zipper noise or clicks)
+          leftOsc.frequency.cancelScheduledValues(now);
+          rightOsc.frequency.cancelScheduledValues(now);
+          leftOsc.frequency.setTargetAtTime(currentLeftFreq, now, 0.04);
+          rightOsc.frequency.setTargetAtTime(currentRightFreq, now, 0.04);
+
+          // Smooth fade-in or volume adjustment (80ms time constant)
+          const targetGain = Math.max(0.0001, currentVolume * 0.5);
+          masterGain.gain.cancelScheduledValues(now);
+          if (!isPlaying) {
+            masterGain.gain.setValueAtTime(Math.max(0.0001, masterGain.gain.value), now);
+          }
+          masterGain.gain.setTargetAtTime(targetGain, now, 0.08);
+
+          isPlaying = true;
+          startKeepAliveAudio();
+          updateMediaSession('playing');
+          requestWakeLock();
+          notifyState(true);
+        },
+
+        stop: function () {
+          if (!isPlaying) return;
+          isPlaying = false;
+          engine.clearSleepTimer();
+
+          if (ctx && masterGain) {
+            const now = ctx.currentTime;
+            masterGain.gain.cancelScheduledValues(now);
+            masterGain.gain.setValueAtTime(Math.max(0.0001, masterGain.gain.value), now);
+            masterGain.gain.setTargetAtTime(0.0001, now, 0.06);
+          }
+
+          if (audioStopScheduleTimeout) {
+            clearTimeout(audioStopScheduleTimeout);
+          }
+          audioStopScheduleTimeout = setTimeout(function () {
+            if (!isPlaying) {
+              stopKeepAliveAudio();
+              releaseWakeLock();
+            }
+          }, 250);
+
+          updateMediaSession('paused');
+          notifyState(false);
+        },
+
+        setVolume: function (volume) {
+          currentVolume = Number(volume);
+          if (isPlaying && ctx && masterGain) {
+            const now = ctx.currentTime;
+            const targetGain = Math.max(0.0001, currentVolume * 0.5);
+            masterGain.gain.cancelScheduledValues(now);
+            masterGain.gain.setTargetAtTime(targetGain, now, 0.05);
+          }
+        },
+
+        setSleepTimer: function (durationSeconds) {
+          engine.clearSleepTimer();
+          const secs = Number(durationSeconds);
+          if (!secs || secs <= 0) return;
+
+          timerEndTimestamp = Date.now() + secs * 1000;
+
+          // Also schedule a gentle fade-out directly on the Web Audio clock as a hardware-accurate backup
+          if (ctx && masterGain && isPlaying) {
+            const fadeStart = ctx.currentTime + Math.max(0, secs - 2);
+            masterGain.gain.setTargetAtTime(0.0001, fadeStart, 0.5);
+          }
+
+          timerInterval = setInterval(function () {
+            if (!timerEndTimestamp) return;
+            const remainingMs = timerEndTimestamp - Date.now();
+            if (remainingMs <= 0) {
+              engine.clearSleepTimer();
+              engine.stop();
+              window.dispatchEvent(new CustomEvent('binaural-sleep-complete'));
+            }
+          }, 500);
+        },
+
+        clearSleepTimer: function () {
+          timerEndTimestamp = null;
+          if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+          }
+          // Restore target gain if still playing and a Web Audio fade was scheduled
+          if (isPlaying && ctx && masterGain) {
+            const now = ctx.currentTime;
+            const targetGain = Math.max(0.0001, currentVolume * 0.5);
+            masterGain.gain.cancelScheduledValues(now);
+            masterGain.gain.setTargetAtTime(targetGain, now, 0.05);
+          }
+        },
+
+        getRemainingSeconds: function () {
+          if (!timerEndTimestamp) return -1;
+          return Math.max(0, Math.ceil((timerEndTimestamp - Date.now()) / 1000));
+        },
+
+        isPlaying: function () {
+          return isPlaying;
+        }
+      };
+
+      // Ensure playback continues seamlessly when switching tabs or backgrounding browser
+      document.addEventListener('visibilitychange', function () {
+        if (isPlaying) {
+          if (ctx && ctx.state === 'suspended') {
+            ctx.resume().catch(function () {});
+          }
+          if (keepAliveAudio && keepAliveAudio.paused) {
+            keepAliveAudio.play().catch(function () {});
+          }
+          if (!document.hidden) {
+            requestWakeLock();
+          }
+        }
+        // Check if sleep timer elapsed while backgrounded
+        if (timerEndTimestamp && Date.now() >= timerEndTimestamp) {
+          engine.clearSleepTimer();
+          engine.stop();
+          window.dispatchEvent(new CustomEvent('binaural-sleep-complete'));
+        }
+      });
+
+      return engine;
+    })();
+  </script>
 </head>
 <body>
+  <div id="loading-container">
+    <img src="icons/Icon-192.png" alt="Beats by Arch Logo" class="loading-logo" />
+    <div class="loading-title">Beats by Arch</div>
+    <div class="loading-spinner"></div>
+  </div>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
