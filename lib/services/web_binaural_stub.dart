@@ -1,5 +1,6 @@
 class WebBinauralBridge {
   static bool get isSupported => false;
+  static bool get isPlaying => false;
 
   static void init({
     required void Function(bool isPlaying) onStateChanged,
@@ -24,4 +25,3 @@ class WebBinauralBridge {
 
   static int getRemainingSeconds() => -1;
 }
-

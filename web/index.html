@@ -319,12 +319,34 @@
       }
 
       function notifyState(playing) {
+        if (typeof engine.onStateChange === 'function') {
+          try {
+            engine.onStateChange(Boolean(playing));
+          } catch (_) {}
+        }
         window.dispatchEvent(new CustomEvent('binaural-state', {
-          detail: { isPlaying: playing }
+          detail: { isPlaying: Boolean(playing) }
         }));
       }
 
+      function notifySleepComplete() {
+        if (typeof engine.onSleepComplete === 'function') {
+          try {
+            engine.onSleepComplete();
+          } catch (_) {}
+        }
+        window.dispatchEvent(new CustomEvent('binaural-sleep-complete'));
+      }
+
       const engine = {
+        onStateChange: null,
+        onSleepComplete: null,
+        setOnStateChange: function (fn) {
+          engine.onStateChange = fn;
+        },
+        setOnSleepComplete: function (fn) {
+          engine.onSleepComplete = fn;
+        },
         play: function (leftFreq, rightFreq, volume, title, artist) {
           currentLeftFreq = Number(leftFreq) || 200;
           currentRightFreq = Number(rightFreq) || 210;
@@ -416,7 +438,7 @@
             if (remainingMs <= 0) {
               engine.clearSleepTimer();
               engine.stop();
-              window.dispatchEvent(new CustomEvent('binaural-sleep-complete'));
+              notifySleepComplete();
             }
           }, 500);
         },
@@ -463,7 +485,7 @@
         if (timerEndTimestamp && Date.now() >= timerEndTimestamp) {
           engine.clearSleepTimer();
           engine.stop();
-          window.dispatchEvent(new CustomEvent('binaural-sleep-complete'));
+          notifySleepComplete();
         }
       });
 

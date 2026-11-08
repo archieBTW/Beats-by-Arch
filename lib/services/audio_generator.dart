@@ -208,6 +208,11 @@ class BinauralBeatService {
     final effectiveTitle = title ?? 'Binaural Beat';
     final effectiveArtist = artist ?? '${beatFreq.toStringAsFixed(1)} Hz';
 
+    _isPlaying = true;
+    if (!_playingController.isClosed) {
+      _playingController.add(true);
+    }
+
     if (kIsWeb && WebBinauralBridge.isSupported) {
       WebBinauralBridge.play(
         leftFrequency: leftFrequency,
@@ -265,6 +270,11 @@ class BinauralBeatService {
   Future<void> stop() async {
     _cancelSleepTimer();
 
+    _isPlaying = false;
+    if (!_playingController.isClosed) {
+      _playingController.add(false);
+    }
+
     if (kIsWeb && WebBinauralBridge.isSupported) {
       WebBinauralBridge.stop();
       return;
@@ -281,6 +291,11 @@ class BinauralBeatService {
   }
 
   Future<void> pause() async {
+    _isPlaying = false;
+    if (!_playingController.isClosed) {
+      _playingController.add(false);
+    }
+
     if (kIsWeb && WebBinauralBridge.isSupported) {
       WebBinauralBridge.stop();
       return;

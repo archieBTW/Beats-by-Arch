@@ -22,8 +22,14 @@ external void _binauralClearSleepTimer();
 @JS('binauralEngine.getRemainingSeconds')
 external num _binauralGetRemainingSeconds();
 
-@JS('window.addEventListener')
-external void _windowAddEventListener(JSString type, JSFunction listener);
+@JS('binauralEngine.isPlaying')
+external bool _binauralIsPlaying();
+
+@JS('binauralEngine.setOnStateChange')
+external void _binauralSetOnStateChange(JSFunction? callback);
+
+@JS('binauralEngine.setOnSleepComplete')
+external void _binauralSetOnSleepComplete(JSFunction? callback);
 
 class WebBinauralBridge {
   static bool _initialized = false;
@@ -31,6 +37,15 @@ class WebBinauralBridge {
   static bool get isSupported {
     try {
       return _binauralEngine != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static bool get isPlaying {
+    if (!isSupported) return false;
+    try {
+      return _binauralIsPlaying();
     } catch (_) {
       return false;
     }
@@ -44,24 +59,16 @@ class WebBinauralBridge {
     _initialized = true;
 
     try {
-      final stateCallback = ((JSObject event) {
-        try {
-          final detail = (event as dynamic).detail;
-          if (detail != null) {
-            final playing = (detail as dynamic).isPlaying as bool?;
-            if (playing != null) {
-              onStateChanged(playing);
-            }
-          }
-        } catch (_) {}
+      final stateCallback = ((JSBoolean playing) {
+        onStateChanged(playing.toDart);
       }).toJS;
 
-      final sleepCallback = ((JSObject event) {
+      final sleepCallback = (() {
         onSleepTimerComplete();
       }).toJS;
 
-      _windowAddEventListener('binaural-state'.toJS, stateCallback);
-      _windowAddEventListener('binaural-sleep-complete'.toJS, sleepCallback);
+      _binauralSetOnStateChange(stateCallback);
+      _binauralSetOnSleepComplete(sleepCallback);
     } catch (_) {}
   }
 
